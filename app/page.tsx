@@ -405,9 +405,9 @@ export default function HomePage() {
 
           <div>
             <h4>Liên hệ</h4>
-            <p>Hotline: 09xx xxx xxx</p>
-            <p>Email: hello@trekshield.vn</p>
-            <p>Facebook: TrekShield Vietnam</p>
+            <p>Hotline: 0382373666</p>
+            <p>Email: trekshield0@gmail.com</p>
+            <p>FanPage: TrekShield</p>
           </div>
         </div>
       </footer>
