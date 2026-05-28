@@ -282,7 +282,7 @@ export default function HomePage() {
               <div className="price-card">
                 <h3>Premium Wax</h3>
                 <p>Dành cho đồ trekking cần độ bền cao.</p>
-                <div className="price">180k <small>/ hộp</small></div>
+                <div className="price">160k <small>/ hộp</small></div>
                 <ul>
                   <li>Chống nước vượt trội</li>
                   <li>Bám lâu, độ bền cao</li>
