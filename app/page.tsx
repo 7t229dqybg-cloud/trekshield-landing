@@ -257,7 +257,7 @@ export default function HomePage() {
               <div className="price-card">
                 <h3>Super Wax</h3>
                 <p>Dành cho người mới, gia đình và đồ dùng hằng ngày.</p>
-                <div className="price">99K <small>/ hộp</small></div>
+                <div className="price">180k <small>/ hộp</small></div>
                 <ul>
                   <li>Dễ thoa, nhanh khô</li>
                   <li>Không làm đổi màu vải</li>
@@ -270,7 +270,7 @@ export default function HomePage() {
                 <span className="popular">Bán chạy</span>
                 <h3>Combo TrekShield</h3>
                 <p>Phù hợp người muốn dùng thử cả 2 dòng wax.</p>
-                <div className="price">179K <small>/ combo</small></div>
+                <div className="price">329k <small>/ combo</small></div>
                 <ul>
                   <li>1 Premium Wax</li>
                   <li>1 Super Wax</li>
@@ -282,7 +282,7 @@ export default function HomePage() {
               <div className="price-card">
                 <h3>Premium Wax</h3>
                 <p>Dành cho đồ trekking cần độ bền cao.</p>
-                <div className="price">119K <small>/ hộp</small></div>
+                <div className="price">180k <small>/ hộp</small></div>
                 <ul>
                   <li>Chống nước vượt trội</li>
                   <li>Bám lâu, độ bền cao</li>
