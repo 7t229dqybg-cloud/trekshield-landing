@@ -8,25 +8,32 @@ export default function OrderForm() {
   );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setStatus("loading");
+  event.preventDefault();
+  setStatus("loading");
 
-    const formData = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const formData = new FormData(form);
 
-    try {
-      const response = await fetch("/api/order", {
-        method: "POST",
-        body: formData,
-      });
+  try {
+    const response = await fetch("/api/order", {
+      method: "POST",
+      body: formData,
+    });
 
-      if (!response.ok) throw new Error("Submit failed");
+    const result = await response.json();
 
-      setStatus("success");
-      event.currentTarget.reset();
-    } catch {
-      setStatus("error");
+    if (!response.ok || !result.ok) {
+      console.error("Submit error:", result);
+      throw new Error(result.message || "Submit failed");
     }
+
+    setStatus("success");
+    form.reset();
+  } catch (error) {
+    console.error(error);
+    setStatus("error");
   }
+}
 
   return (
     <form className="order-form" onSubmit={handleSubmit}>
