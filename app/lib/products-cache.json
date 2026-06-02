@@ -1,0 +1,35 @@
+[
+  {
+    "id": "super-wax",
+    "type": "Sáp",
+    "updatedAt": "Wed Jun 03 2026 00:00:00 GMT+0700 (Giờ Đông Dương)",
+    "badge": "Phù hợp người mới",
+    "price": "160K",
+    "status": "Active",
+    "description": "Dễ thoa, nhanh khô, không làm đổi màu quần áo và linh hoạt trên nhiều loại vải.",
+    "stock": 100,
+    "name": "super-wax"
+  },
+  {
+    "id": "premium-wax",
+    "stock": 100,
+    "name": "premium-wax",
+    "price": "180K",
+    "status": "Active",
+    "description": "Chống nước vượt trội, bám lâu, độ bền cao, phù hợp vải chuyên dụng.",
+    "updatedAt": "Wed Jun 03 2026 00:00:00 GMT+0700 (Giờ Đông Dương)",
+    "badge": "Bám lâu",
+    "type": "Sáp"
+  },
+  {
+    "id": "combo-trekshield",
+    "type": "Sáp",
+    "updatedAt": "Wed Jun 03 2026 00:00:00 GMT+0700 (Giờ Đông Dương)",
+    "badge": "Bán chạy",
+    "description": "Bộ đôi linh hoạt cho nhiều loại đồ outdoor, balô, áo khoác, giày vải và túi canvas.",
+    "price": "329K",
+    "status": "Active",
+    "name": "combo-trekshield",
+    "stock": 100
+  }
+]

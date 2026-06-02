@@ -1,0 +1,50 @@
+[
+  {
+    "id": "Cqh9UA3cWwZ4YP3PcjoC",
+    "qty": 1,
+    "customer": "Test TrekShield 1",
+    "product": "Combo TrekShield",
+    "status": "Completed",
+    "name": "Test TrekShield 1",
+    "location": "Đà Nẵng",
+    "date": "Wed Jun 03 2026 00:00:00 GMT+0700 (Giờ Đông Dương)",
+    "note": "Test 3",
+    "phone": "923311331",
+    "total": "329K",
+    "createdAt": "2026-06-02T17:40:22.572Z",
+    "source": "google-sheet-sync",
+    "quantity": "1"
+  },
+  {
+    "id": "iardvOmdQ6LTUbA3dhzi",
+    "location": "Hà Nội",
+    "date": "Wed Jun 03 2026 00:00:00 GMT+0700 (Giờ Đông Dương)",
+    "note": "Test 1",
+    "qty": 1,
+    "customer": "Đào Mạnh Cường",
+    "product": "Super Wax",
+    "status": "Completed",
+    "name": "Đào Mạnh Cường",
+    "createdAt": "2026-06-02T17:39:35.777Z",
+    "total": "180K",
+    "phone": "9000000000",
+    "source": "google-sheet-sync",
+    "quantity": "1"
+  },
+  {
+    "id": "DfYyrx9CcRAPZozo7L8u",
+    "customer": "Test TrekShield 1",
+    "name": "Test TrekShield 1",
+    "phone": "9099999",
+    "product": "Combo TrekShield",
+    "quantity": "1",
+    "qty": 1,
+    "total": "329K",
+    "location": "TP HCM",
+    "note": "Test 2",
+    "status": "Completed",
+    "date": "Wed Jun 03 2026 00:00:00 GMT+0700 (Giờ Đông Dương)",
+    "createdAt": "2026-06-02T17:38:38.871Z",
+    "source": "google-sheet-sync"
+  }
+]

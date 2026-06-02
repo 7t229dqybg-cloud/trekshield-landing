@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: orders
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required, 2-100 chars) - Customer full name
+    //   - customer: string (required, 2-100 chars) - Same as name
+    //   - phone: string (required, 8-20 chars) - Customer phone number
+    //   - product: string (required, <= 100 chars) - Product name
+    //   - quantity: string (required) - Quantity from client form
+    //   - qty: number (required, > 0) - Quantity parsed as number
+    //   - total: string (required, <= 20 chars) - Total amount formatted (e.g. "329K")
+    //   - location: string (optional, <= 200 chars) - Delivery address
+    //   - note: string (optional, <= 500 chars) - Order note
+    //   - status: string (required) - Order status: 'Pending', 'Completed', 'Cancelled'
+    //   - source: string (required, == 'trekshield-landing') - Source label
+    //   - date: string (required) - Date string in 'vi-VN' locale
+    //   - createdAt: string (required) - ISO 8601 date string
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the order document contains only allowed fields
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate email format (helper)
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}$");
+    }
+
+    // Validate ISO 8601 date string format (YYYY-MM-DDTHH:MM:SS)
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}.*Z?$");
+    }
+
+    // Validate order schema on creation
+    function isValidOrderCreation(data) {
+      let allowedFields = ['id', 'name', 'customer', 'phone', 'product', 'quantity', 'qty', 'total', 'location', 'note', 'status', 'source', 'date', 'createdAt'];
+      return request.resource.data.keys().hasAll(['name', 'customer', 'phone', 'product', 'qty', 'total', 'status', 'source', 'createdAt']) &&
+             hasOnlyAllowedFields(allowedFields) &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+             data.customer is string && data.customer.size() >= 2 && data.customer.size() <= 100 &&
+             data.phone is string && data.phone.size() >= 8 && data.phone.size() <= 20 &&
+             data.product is string && data.product.size() <= 100 &&
+             data.qty is number && data.qty > 0 &&
+             data.total is string && data.total.size() <= 20 &&
+             (data.status == 'Pending' || data.status == 'Completed' || data.status == 'Cancelled') &&
+             (data.source == 'trekshield-landing' || data.source == 'google-sheet-sync') &&
+             isValidDateString(data.createdAt) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 200)) &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 500)) &&
+             (!('id' in data) || (data.id is string));
+    }
+
+    // Validate order schema on update
+    function isValidOrderUpdate(data) {
+      let allowedFields = ['id', 'name', 'customer', 'phone', 'product', 'quantity', 'qty', 'total', 'location', 'note', 'status', 'source', 'date', 'createdAt'];
+      return hasOnlyAllowedFields(allowedFields) &&
+             (data.status == 'Pending' || data.status == 'Completed' || data.status == 'Cancelled');
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /orders/{orderId} {
+      // 1. Cho phép bất kỳ ai tạo đơn hàng mới với điều kiện phải khớp schema xác thực
+      allow create: if isValidOrderCreation(request.resource.data);
+
+      // 2. Cho phép đọc công khai hoặc qua Admin, cập nhật trạng thái hoặc xóa đơn hàng đồng bộ
+      allow read: if true;
+      allow delete: if true;
+      allow update: if isValidOrderUpdate(request.resource.data) || isAuthenticated();
+    }
+
+    match /products/{productId} {
+      allow read, write: if true;
+    }
+  }
+}

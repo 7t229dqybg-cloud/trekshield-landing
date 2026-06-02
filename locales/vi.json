@@ -1,0 +1,18 @@
+{
+  "admin.products.title": "Sản phẩm",
+  "admin.products.heading": "Danh Mục Sản Phẩm",
+  "admin.products.description": "Cập nhật thông tin giá bán lẻ, trạng thái hoạt động và khối lượng tồn kho thực tế cho từng dòng sáp TrekShield Wax",
+  "button.sync": "Đồng bộ kho 3 bên",
+  "button.sync.loading": "Đang đồng bộ kho...",
+  "button.restock": "Nhập thêm +10",
+  "button.restock.loading": "Đang lưu...",
+  "label.stock": "Số lượng tồn kho",
+  "label.type": "Loại",
+  "label.status": "Trạng thái",
+  "status.low": "⚠️ Sắp hết",
+  "status.ok": "✅ Đủ hàng",
+  "total.products": "Tổng số mặt hàng",
+  "total.stock": "Khối lượng tồn kho",
+  "best.seller": "Sản phẩm bán chạy nhất",
+  "revenue": "Doanh thu sản phẩm"
+}
