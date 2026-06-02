@@ -1,10 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { NextResponse } from "next/server";
 import { db } from "../../../../lib/firebase";
 import { doc, deleteDoc } from "firebase/firestore";
 import fs from 'fs';
 import path from 'path';
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
+  const timestamp = new Date().toISOString();
   try {
     const { id, phone } = await request.json();
     if (!id) {
@@ -13,14 +18,14 @@ export async function POST(request: Request) {
 
     console.log(`Processing deletion for order: ${id}`);
 
-    // 1. Xóa đơn hàng trên Cloud Firestore
+    // 1. Xóa đơn hàng trên Cloud Firestore trước
     if (!id.startsWith('local_')) {
       try {
         const orderDocRef = doc(db, "orders", id);
         await deleteDoc(orderDocRef);
         console.log(`Deleted order ${id} from Cloud Firestore successfully.`);
-      } catch (fsError) {
-        console.error(`Error deleting order ${id} from Firestore:`, fsError);
+      } catch (fsError: any) {
+        console.error(`[Order Delete API] [${timestamp}] Error deleting order ${id} from Firestore:`, fsError.message || fsError);
       }
     }
 
@@ -65,18 +70,27 @@ export async function POST(request: Request) {
           redirect: "follow",
           cache: "no-store",
         });
+
         const text = await googleResponse.text();
         console.log("Google Sheets delete webhook response:", text);
-      } catch (googleError) {
-        console.error("Error calling Google Sheet delete webhook:", googleError);
+
+        let parsed: any = {};
+        try { parsed = JSON.parse(text); } catch (e) {}
+
+        if (!googleResponse.ok || parsed.ok === false) {
+          const errMsg = parsed.message || `Sheets API returned HTTP ${googleResponse.status}`;
+          console.error(`[Order Delete API] [${timestamp}] Google Sheet delete failed for order ID: ${id}. Error: ${errMsg}`);
+        }
+      } catch (googleError: any) {
+        console.error(`[Order Delete API] [${timestamp}] Google Sheet delete failed for order ID: ${id}. Error: ${googleError.message || googleError}`);
       }
     } else {
       console.warn("Google Sheet delete webhook URL or secret is missing. Skipping Sheets delete.");
     }
 
     return NextResponse.json({ ok: true, message: "Đơn hàng đã được xóa đồng bộ trên các kênh." });
-  } catch (error) {
-    console.error("Order delete error:", error);
+  } catch (error: any) {
+    console.error(`[Order Delete API] [${timestamp}] Order delete error:`, error.message || error);
     return NextResponse.json({ ok: false, message: "Có lỗi xảy ra khi xóa đơn hàng." }, { status: 500 });
   }
 }

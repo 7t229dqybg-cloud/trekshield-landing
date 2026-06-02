@@ -1,10 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { db } from "../../../../lib/firebase";
 import { doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import fs from 'fs';
 import path from 'path';
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
+  const timestamp = new Date().toISOString();
   try {
     const data = await request.json();
     const { action, secret, id, phone, customer, name, product, quantity, qty, total, location, note, status, date, createdAt } = data;
@@ -12,7 +17,7 @@ export async function POST(request: Request) {
     // Xác thực secret key để đảm bảo an toàn bảo mật dữ liệu
     const webhookSecret = process.env.ORDER_WEBHOOK_SECRET;
     if (!secret || secret !== webhookSecret) {
-      console.warn("Unauthorized sync-webhook request: invalid secret.");
+      console.warn(`[Sync Webhook API] [${timestamp}] Unauthorized sync-webhook request: invalid secret.`);
       return NextResponse.json({ ok: false, message: "Unauthorized." }, { status: 401 });
     }
 
@@ -21,14 +26,22 @@ export async function POST(request: Request) {
     // Dùng băm ID nếu Google Sheet không trả về id doc
     const syncId = id || `sheet_${phone || ""}_${date || ""}`.replace(/[^a-zA-Z0-9_]/g, "");
 
+    const syncMetadata = {
+      sheetRowId: id || null,
+      lastSyncedAt: new Date().toISOString(),
+      syncStatus: "synced",
+      syncError: null,
+      updatedAt: new Date().toISOString(),
+    };
+
     if (action === "sheet_delete" || action === "delete") {
       // 1. Đồng bộ XÓA lên Firestore
       if (id && !id.startsWith('local_')) {
         try {
           await deleteDoc(doc(db, "orders", id));
           console.log(`Sync deleted Firestore doc: ${id}`);
-        } catch (fsErr) {
-          console.error(`Sync delete doc ${id} failed in Firestore:`, fsErr);
+        } catch (fsErr: any) {
+          console.error(`[Sync Webhook API] [${timestamp}] Sync delete doc ${id} failed in Firestore:`, fsErr.message || fsErr);
         }
       }
 
@@ -48,14 +61,19 @@ export async function POST(request: Request) {
     } 
     
     else if (action === "sheet_update" || action === "update") {
+      const updateData = {
+        status,
+        ...syncMetadata,
+      };
+
       // 1. Đồng bộ CẬP NHẬT lên Firestore
       if (id && !id.startsWith('local_')) {
         try {
           const orderDocRef = doc(db, "orders", id);
-          await updateDoc(orderDocRef, { status });
+          await updateDoc(orderDocRef, updateData);
           console.log(`Sync updated Firestore doc ${id} to status ${status}`);
-        } catch (fsErr) {
-          console.error(`Sync update doc ${id} failed in Firestore:`, fsErr);
+        } catch (fsErr: any) {
+          console.error(`[Sync Webhook API] [${timestamp}] Sync update doc ${id} failed in Firestore:`, fsErr.message || fsErr);
         }
       }
 
@@ -65,7 +83,7 @@ export async function POST(request: Request) {
         if (fs.existsSync(cacheFilePath)) {
           const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
           let cachedOrders = JSON.parse(fileContent || '[]');
-          cachedOrders = cachedOrders.map((o: any) => (o.id === id || o.phone === phone) ? { ...o, status } : o);
+          cachedOrders = cachedOrders.map((o: any) => (o.id === id || o.phone === phone) ? { ...o, ...updateData } : o);
           fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
           console.log(`Sync updated local cache order ${id} to status ${status}`);
         }
@@ -90,6 +108,7 @@ export async function POST(request: Request) {
         source: "google-sheet-sync",
         date: date || new Date().toLocaleDateString('vi-VN'),
         createdAt: createdAt || new Date().toISOString(),
+        ...syncMetadata,
       };
 
       // 1. Đồng bộ THÊM/GHI ĐÈ lên Firestore
@@ -97,8 +116,8 @@ export async function POST(request: Request) {
         try {
           await setDoc(doc(db, "orders", syncId), order);
           console.log(`Sync created/overrode Firestore doc: ${syncId}`);
-        } catch (fsErr) {
-          console.error(`Sync write doc ${syncId} failed in Firestore:`, fsErr);
+        } catch (fsErr: any) {
+          console.error(`[Sync Webhook API] [${timestamp}] Sync write doc ${syncId} failed in Firestore:`, fsErr.message || fsErr);
         }
       }
 
@@ -122,8 +141,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true, message: "Đồng bộ dữ liệu ba bên thành công." });
-  } catch (error) {
-    console.error("Sync webhook error:", error);
+  } catch (error: any) {
+    console.error(`[Sync Webhook API] [${timestamp}] Sync webhook error:`, error.message || error);
     return NextResponse.json({ ok: false, message: "Lỗi xử lý webhook đồng bộ." }, { status: 500 });
   }
 }

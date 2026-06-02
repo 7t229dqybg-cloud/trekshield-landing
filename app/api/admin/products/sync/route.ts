@@ -1,16 +1,21 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const */
 import { NextResponse } from "next/server";
 import { db } from "../../../../lib/firebase";
 import { collection, doc, setDoc, getDocs } from "firebase/firestore";
 import fs from 'fs';
 import path from 'path';
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
+  const timestamp = new Date().toISOString();
   try {
     const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
     const webhookSecret = process.env.ORDER_WEBHOOK_SECRET;
 
     if (!webhookUrl || !webhookSecret) {
-      console.error("Products Sync API: Missing configuration.");
+      console.error(`[Products Sync API] [${timestamp}] Sync failed: Missing configuration.`);
       return NextResponse.json({ ok: false, message: "Thiếu cấu hình Google Sheet webhook." }, { status: 500 });
     }
 
@@ -35,12 +40,19 @@ export async function POST(request: Request) {
           } else if (Array.isArray(json)) {
             sheetProducts = json;
           }
-        } catch (jsonErr) {
+        } catch (jsonErr: any) {
           console.warn("Could not parse products from sheet as JSON:", text);
+          throw new Error(`JSON parse error: ${jsonErr.message}`);
         }
+      } else {
+        throw new Error(`Sheets API returned HTTP ${googleResponse.status}`);
       }
-    } catch (sheetErr) {
-      console.error("Error reading products from Google Sheet:", sheetErr);
+    } catch (sheetErr: any) {
+      console.error(`[Products Sync API] [${timestamp}] Error reading products from Google Sheet:`, sheetErr.message || sheetErr);
+      return NextResponse.json({ 
+        ok: false, 
+        message: "Không thể kết nối Google Sheets: " + (sheetErr.message || String(sheetErr)) 
+      }, { status: 502 });
     }
 
     // 2. Lấy dữ liệu sản phẩm từ Cloud Firestore
@@ -50,8 +62,8 @@ export async function POST(request: Request) {
       querySnapshot.forEach((doc) => {
         firestoreProducts.push({ id: doc.id, ...doc.data() });
       });
-    } catch (fsErr) {
-      console.error("Error fetching products from Cloud Firestore:", fsErr);
+    } catch (fsErr: any) {
+      console.error(`[Products Sync API] [${timestamp}] Error fetching products from Cloud Firestore:`, fsErr.message || fsErr);
     }
 
     // 3. Khởi tạo maps so sánh
@@ -92,9 +104,15 @@ export async function POST(request: Request) {
         finalProductData = { ...fProduct };
       }
 
+      let source = "local-cache-fallback";
+      if (fProduct) {
+        source = "firestore";
+      }
+
       if (sProduct) {
         // Ưu tiên dữ liệu tồn kho từ Google Sheet nếu có chênh lệch
         targetStock = Number(sProduct.stock) || 0;
+        source = "google-sheet-sync";
         finalProductData = {
           ...finalProductData,
           ...sProduct,
@@ -104,19 +122,14 @@ export async function POST(request: Request) {
         };
       }
 
-      // Đảm bảo ghi đồng bộ lại Firestore
-      try {
-        const docRef = doc(db, "products", id);
-        await setDoc(docRef, finalProductData);
-        stats.syncedToFirestore++;
-      } catch (fsErr) {
-        console.error(`Failed to sync product ${id} to Firestore:`, fsErr);
-      }
+      // Đảm bảo ghi đồng bộ lại Firestore kèm metadata
+      let syncStatus = "synced";
+      let syncError = null;
 
       // Đảm bảo ghi đồng bộ lại Google Sheet nếu chưa khớp
       if (!sProduct || Number(sProduct.stock) !== targetStock) {
         try {
-          await fetch(webhookUrl, {
+          const sheetRes = await fetch(webhookUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({
@@ -127,14 +140,42 @@ export async function POST(request: Request) {
             }),
             redirect: "follow",
           });
-          stats.syncedToSheet++;
-        } catch (sheetErr) {
-          console.error(`Failed to sync product ${id} to Sheet:`, sheetErr);
+
+          if (sheetRes.ok) {
+            stats.syncedToSheet++;
+            console.log(`Synced product ${id} stock to Sheet: ${targetStock}`);
+          } else {
+            throw new Error(`Sheets update_product returned HTTP ${sheetRes.status}`);
+          }
+        } catch (sheetErr: any) {
+          syncStatus = "failed";
+          syncError = sheetErr.message || String(sheetErr);
+          console.error(`[Products Sync API] [${timestamp}] Failed to sync product ${id} to Sheet:`, syncError);
         }
       }
 
+      const syncMetadata = {
+        lastSyncedAt: new Date().toISOString(),
+        syncStatus,
+        syncError,
+        source,
+        updatedAt: new Date().toISOString(),
+      };
+
+      try {
+        const docRef = doc(db, "products", id);
+        const finalDoc = {
+          ...finalProductData,
+          ...syncMetadata,
+        };
+        await setDoc(docRef, finalDoc);
+        stats.syncedToFirestore++;
+      } catch (fsErr: any) {
+        console.error(`[Products Sync API] [${timestamp}] Failed to sync product ${id} to Firestore:`, fsErr.message || fsErr);
+      }
+
       // Cập nhật lại cache map
-      cachedProductMap.set(id, finalProductData);
+      cachedProductMap.set(id, { ...finalProductData, ...syncMetadata });
     }
 
     // Ghi ngược lại tệp cache cục bộ
@@ -147,8 +188,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true, message: "Đồng bộ tồn kho sản phẩm hoàn tất.", stats });
-  } catch (error) {
-    console.error("Products sync error:", error);
+  } catch (error: any) {
+    console.error(`[Products Sync API] [${timestamp}] Products sync error:`, error.message || error);
     return NextResponse.json({ ok: false, message: "Lỗi đồng bộ sản phẩm." }, { status: 500 });
   }
 }

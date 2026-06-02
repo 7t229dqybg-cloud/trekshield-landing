@@ -1,16 +1,21 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const */
 import { NextResponse } from "next/server";
 import { db } from "../../../../lib/firebase";
 import { collection, doc, setDoc, deleteDoc, getDocs } from "firebase/firestore";
 import fs from 'fs';
 import path from 'path';
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
+  const timestamp = new Date().toISOString();
   try {
     const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
     const webhookSecret = process.env.ORDER_WEBHOOK_SECRET;
 
     if (!webhookUrl || !webhookSecret) {
-      console.error("Sync API: Missing webhook configuration.");
+      console.error(`[Sync Orders API] [${timestamp}] Sync failed: Missing webhook configuration.`);
       return NextResponse.json({ ok: false, message: "Thiếu cấu hình Google Sheet webhook." }, { status: 500 });
     }
 
@@ -42,12 +47,17 @@ export async function POST(request: Request) {
         } else {
           console.warn("Invalid format returned from Google Sheet:", text);
         }
-      } catch (parseErr) {
+      } catch (parseErr: any) {
         console.warn("Could not parse Google Sheet response as JSON. It might be empty or offline:", text);
+        throw new Error(`JSON parse error: ${parseErr.message}`);
       }
-    } catch (sheetErr) {
-      console.error("Error reading from Google Sheet:", sheetErr);
-      // Nếu offline/sandbox giới hạn mạng, tiếp tục dùng local cache & Firestore
+    } catch (sheetErr: any) {
+      console.error(`[Sync Orders API] [${timestamp}] Error reading from Google Sheet:`, sheetErr.message || sheetErr);
+      // Let it throw or return error since we want production to report connectivity health
+      return NextResponse.json({ 
+        ok: false, 
+        message: "Không thể kết nối với Google Sheet: " + (sheetErr.message || String(sheetErr)) 
+      }, { status: 502 });
     }
 
     // 2. Lấy toàn bộ đơn hàng từ Cloud Firestore
@@ -58,8 +68,8 @@ export async function POST(request: Request) {
         firestoreOrders.push({ id: doc.id, ...doc.data() });
       });
       console.log(`Fetched ${firestoreOrders.length} orders from Firestore.`);
-    } catch (fsErr) {
-      console.error("Error fetching from Cloud Firestore:", fsErr);
+    } catch (fsErr: any) {
+      console.error(`[Sync Orders API] [${timestamp}] Error fetching from Cloud Firestore:`, fsErr.message || fsErr);
     }
 
     // Đọc thêm từ cache cục bộ làm dự phòng
@@ -108,6 +118,12 @@ export async function POST(request: Request) {
           source: "google-sheet-sync",
           date: sheetOrder.date || new Date().toLocaleDateString('vi-VN'),
           createdAt: sheetOrder.createdAt || new Date().toISOString(),
+          // Sync metadata
+          sheetRowId: sheetOrder.rowId || sheetOrder.rowNumber || null,
+          lastSyncedAt: new Date().toISOString(),
+          syncStatus: "synced",
+          syncError: null,
+          updatedAt: new Date().toISOString(),
         };
 
         // Ghi vào Firestore
@@ -115,13 +131,13 @@ export async function POST(request: Request) {
           await setDoc(newDocRef, newOrder);
           stats.addedToFirestore++;
           console.log(`Synced new order from Sheet to Firestore: ${newId}`);
-        } catch (fsWriteErr) {
-          console.error(`Failed to write new sheet order to Firestore:`, fsWriteErr);
+        } catch (fsWriteErr: any) {
+          console.error(`[Sync Orders API] [${timestamp}] Failed to write new sheet order to Firestore:`, fsWriteErr.message || fsWriteErr);
         }
 
         // Gọi webhook Sheets để cập nhật ID mới cho dòng này
         try {
-          await fetch(webhookUrl, {
+          const sheetRes = await fetch(webhookUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({
@@ -133,10 +149,22 @@ export async function POST(request: Request) {
             }),
             redirect: "follow",
           });
+          
+          if (!sheetRes.ok) {
+            throw new Error(`Sheets update_id returned HTTP ${sheetRes.status}`);
+          }
+          
           stats.updatedIdsInSheet++;
           console.log(`Updated Sheet row with new ID: ${newId}`);
-        } catch (sheetUpdateErr) {
-          console.error(`Failed to update ID back on Sheet:`, sheetUpdateErr);
+        } catch (sheetUpdateErr: any) {
+          console.error(`[Sync Orders API] [${timestamp}] Failed to update ID back on Sheet for ${newId}:`, sheetUpdateErr.message || sheetUpdateErr);
+          // Update Firestore sync status to failed
+          try {
+            await setDoc(newDocRef, { 
+              syncStatus: "failed", 
+              syncError: `Failed to update ID on Sheets: ${sheetUpdateErr.message || String(sheetUpdateErr)}` 
+            }, { merge: true });
+          } catch (e) {}
         }
 
         // Thêm vào bản đồ tạm để xử lý tiếp
@@ -157,14 +185,20 @@ export async function POST(request: Request) {
             source: sheetOrder.source || "google-sheet-sync",
             date: sheetOrder.date || new Date().toLocaleDateString('vi-VN'),
             createdAt: sheetOrder.createdAt || new Date().toISOString(),
+            // Sync metadata
+            sheetRowId: sheetOrder.rowId || sheetOrder.rowNumber || null,
+            lastSyncedAt: new Date().toISOString(),
+            syncStatus: "synced",
+            syncError: null,
+            updatedAt: new Date().toISOString(),
           };
 
           try {
             await setDoc(newDocRef, newOrder);
             stats.addedToFirestore++;
             console.log(`Synced order ${sId} from Sheet to Firestore (imported/restored).`);
-          } catch (fsWriteErr) {
-            console.error(`Failed to write restored sheet order ${sId} to Firestore:`, fsWriteErr);
+          } catch (fsWriteErr: any) {
+            console.error(`[Sync Orders API] [${timestamp}] Failed to write restored sheet order ${sId} to Firestore:`, fsWriteErr.message || fsWriteErr);
           }
 
           firestoreOrderMap.set(sId, newOrder);
@@ -175,21 +209,40 @@ export async function POST(request: Request) {
 
       // TH3: ID tồn tại ở cả hai nơi -> So sánh trạng thái
       const fsOrder = firestoreOrderMap.get(sId);
-      if (fsOrder && fsOrder.status !== sheetOrder.status) {
-        // Cập nhật trạng thái Firestore theo Sheets
-        try {
-          const docRef = doc(db, "orders", sId);
-          await setDoc(docRef, { ...fsOrder, status: sheetOrder.status }, { merge: true });
-          stats.updatedInFirestore++;
-          console.log(`Updated status of ${sId} in Firestore to match Sheets: ${sheetOrder.status}`);
-        } catch (fsUpdateErr) {
-          console.error(`Failed to update status in Firestore:`, fsUpdateErr);
+      if (fsOrder) {
+        let needsUpdate = false;
+        const updateData: any = {};
+
+        if (fsOrder.status !== sheetOrder.status) {
+          updateData.status = sheetOrder.status;
+          needsUpdate = true;
         }
 
-        // Cập nhật bản đồ cache
-        const cachedItem = cachedOrderMap.get(sId);
-        if (cachedItem) {
-          cachedOrderMap.set(sId, { ...cachedItem, status: sheetOrder.status });
+        // Sync metadata update
+        if (!fsOrder.lastSyncedAt || fsOrder.syncStatus !== "synced" || fsOrder.sheetRowId !== (sheetOrder.rowId || sheetOrder.rowNumber)) {
+          updateData.sheetRowId = sheetOrder.rowId || sheetOrder.rowNumber || null;
+          updateData.lastSyncedAt = new Date().toISOString();
+          updateData.syncStatus = "synced";
+          updateData.syncError = null;
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          updateData.updatedAt = new Date().toISOString();
+          try {
+            const docRef = doc(db, "orders", sId);
+            await setDoc(docRef, updateData, { merge: true });
+            stats.updatedInFirestore++;
+            console.log(`Updated status/metadata of ${sId} in Firestore.`);
+          } catch (fsUpdateErr: any) {
+            console.error(`[Sync Orders API] [${timestamp}] Failed to update status in Firestore for ${sId}:`, fsUpdateErr.message || fsUpdateErr);
+          }
+
+          // Cập nhật bản đồ cache
+          const cachedItem = cachedOrderMap.get(sId);
+          if (cachedItem) {
+            cachedOrderMap.set(sId, { ...cachedItem, ...updateData });
+          }
         }
       }
     }
@@ -207,8 +260,8 @@ export async function POST(request: Request) {
             await deleteDoc(doc(db, "orders", fsId));
             stats.deletedFromFirestore++;
             console.log(`Deleted order ${fsId} from Firestore because it was deleted from Sheets.`);
-          } catch (fsDeleteErr) {
-            console.error(`Failed to delete document ${fsId} from Firestore:`, fsDeleteErr);
+          } catch (fsDeleteErr: any) {
+            console.error(`[Sync Orders API] [${timestamp}] Failed to delete document ${fsId} from Firestore:`, fsDeleteErr.message || fsDeleteErr);
           }
         }
         cachedOrderMap.delete(fsId);
@@ -271,8 +324,8 @@ export async function POST(request: Request) {
       stats
     });
 
-  } catch (error) {
-    console.error("Sync API error:", error);
+  } catch (error: any) {
+    console.error(`[Sync Orders API] [${timestamp}] Sync API error:`, error.message || error);
     return NextResponse.json({ ok: false, message: "Có lỗi xảy ra khi thực hiện đồng bộ hóa." }, { status: 500 });
   }
 }

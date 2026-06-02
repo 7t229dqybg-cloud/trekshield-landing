@@ -1,10 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { NextResponse } from "next/server";
 import { db } from "../../../../lib/firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import fs from 'fs';
 import path from 'path';
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
+  const timestamp = new Date().toISOString();
   try {
     const { id, stock, change } = await request.json();
     if (!id) {
@@ -13,13 +18,13 @@ export async function POST(request: Request) {
 
     console.log(`Updating stock for product ${id}: stock=${stock}, change=${change}`);
 
-    // 1. Cập nhật trong Firestore
+    // 1. Cập nhật trong Firestore trước
     let newStock = stock;
+    let productData: any = null;
+    const productDocRef = doc(db, "products", id);
+    
     try {
-      const productDocRef = doc(db, "products", id);
       const productSnap = await getDoc(productDocRef);
-      let productData: any = null;
-
       if (productSnap.exists()) {
         productData = productSnap.data();
         if (change !== undefined) {
@@ -41,13 +46,15 @@ export async function POST(request: Request) {
         ...productData,
         stock: newStock,
         status: newStock > 15 ? 'Active' : 'Low stock',
-        updatedAt: new Date().toLocaleDateString('vi-VN')
+        updatedAt: new Date().toLocaleDateString('vi-VN'),
+        syncStatus: "pending",
+        source: "admin-dashboard",
       };
 
       await setDoc(productDocRef, updatedProduct);
-      console.log(`Updated Firestore product ${id} stock to ${newStock}`);
-    } catch (fsError) {
-      console.error(`Error updating product ${id} in Firestore:`, fsError);
+      console.log(`Updated Firestore product ${id} stock to ${newStock} (pending sync)`);
+    } catch (fsError: any) {
+      console.error(`[Product Update API] [${timestamp}] Error updating product ${id} in Firestore:`, fsError.message || fsError);
     }
 
     // 2. Cập nhật trong cache local
@@ -64,7 +71,8 @@ export async function POST(request: Request) {
               ...p,
               stock: finalStock,
               status: finalStock > 15 ? 'Active' : 'Low stock',
-              updatedAt: new Date().toLocaleDateString('vi-VN')
+              updatedAt: new Date().toLocaleDateString('vi-VN'),
+              syncStatus: "pending"
             };
           }
           return p;
@@ -83,7 +91,7 @@ export async function POST(request: Request) {
 
     if (webhookUrl && webhookSecret) {
       try {
-        await fetch(webhookUrl, {
+        const googleResponse = await fetch(webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
@@ -95,15 +103,57 @@ export async function POST(request: Request) {
           redirect: "follow",
           cache: "no-store",
         });
-        console.log(`Sent product stock update for ${id} to Sheets.`);
-      } catch (sheetError) {
-        console.error("Error updating product stock on Sheets:", sheetError);
+
+        const text = await googleResponse.text();
+        console.log(`Sent product stock update for ${id} to Sheets. Response: ${text}`);
+
+        let parsed: any = {};
+        try { parsed = JSON.parse(text); } catch (e) {}
+
+        if (googleResponse.ok && parsed.ok !== false) {
+          const syncSuccess = {
+            syncStatus: "synced",
+            syncError: null,
+            lastSyncedAt: new Date().toISOString(),
+          };
+          await updateDoc(productDocRef, syncSuccess);
+        } else {
+          const errMsg = parsed.message || `Sheets API returned HTTP ${googleResponse.status}`;
+          console.error(`[Product Update API] [${timestamp}] Google Sheet update failed for product ID: ${id}. Error: ${errMsg}`);
+          const syncFailure = {
+            syncStatus: "failed",
+            syncError: errMsg,
+            lastSyncedAt: new Date().toISOString(),
+          };
+          await updateDoc(productDocRef, syncFailure);
+        }
+      } catch (sheetError: any) {
+        const errMsg = sheetError.message || String(sheetError);
+        console.error(`[Product Update API] [${timestamp}] Google Sheet update failed for product ID: ${id}. Error: ${errMsg}`);
+        const syncFailure = {
+          syncStatus: "failed",
+          syncError: errMsg,
+          lastSyncedAt: new Date().toISOString(),
+        };
+        try {
+          await updateDoc(productDocRef, syncFailure);
+        } catch (e) {}
       }
+    } else {
+      console.warn("Google Sheet update webhook URL or secret is missing. Skipping Sheets update.");
+      const syncFailure = {
+        syncStatus: "failed",
+        syncError: "Missing webhook configuration",
+        lastSyncedAt: new Date().toISOString(),
+      };
+      try {
+        await updateDoc(productDocRef, syncFailure);
+      } catch (e) {}
     }
 
     return NextResponse.json({ ok: true, message: "Cập nhật tồn kho sản phẩm thành công." });
-  } catch (error) {
-    console.error("Product update stock error:", error);
+  } catch (error: any) {
+    console.error(`[Product Update API] [${timestamp}] Product update stock error:`, error.message || error);
     return NextResponse.json({ ok: false, message: "Lỗi hệ thống khi cập nhật kho." }, { status: 500 });
   }
 }

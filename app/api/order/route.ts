@@ -1,14 +1,21 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { NextResponse } from "next/server";
 import { rateLimiter } from "../../lib/rateLimit";
 import { idempotencyService } from "../../lib/idempotency";
 import { db } from "../../lib/firebase";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, getDoc } from "firebase/firestore";
+import fs from 'fs';
+import path from 'path';
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function getFormValue(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
 }
 
 export async function POST(request: Request) {
+  const timestamp = new Date().toISOString();
   // Trích xuất IP của Client an toàn sau proxy
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
              request.headers.get("x-real-ip") ||
@@ -150,20 +157,22 @@ export async function POST(request: Request) {
       source: "trekshield-landing",
       date: new Date().toLocaleDateString('vi-VN'),
       createdAt: new Date().toISOString(),
+      // Sync metadata initially set as pending
+      syncStatus: "pending",
+      syncError: null,
+      updatedAt: new Date().toISOString(),
     };
 
     // 1. Lưu đơn hàng vào Firestore
     try {
       await setDoc(orderDocRef, order);
       console.log("Order saved to Firestore with ID:", orderId);
-    } catch (fsError) {
-      console.error("Firestore save error:", fsError);
+    } catch (fsError: any) {
+      console.error("Firestore save error:", fsError.message || fsError);
     }
 
     // 2. Lưu đơn hàng vào file cache nội bộ làm fallback
     try {
-      const fs = require('fs');
-      const path = require('path');
       const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
       
       // Đảm bảo thư mục tồn tại
@@ -190,10 +199,6 @@ export async function POST(request: Request) {
 
     // --- KHẤU TRỪ TỒN KHO SẢN PHẨM ---
     try {
-      const fs = require('fs');
-      const path = require('path');
-      const { doc: fsDoc, getDoc, setDoc: fsSetDoc } = require('firebase/firestore');
-      
       let productId = "";
       const prodLower = product.toLowerCase();
       if (prodLower.includes("combo")) {
@@ -207,14 +212,14 @@ export async function POST(request: Request) {
       if (productId) {
         console.log(`Deducting stock for product: ${productId}, qty: ${qtyNum}`);
 
+        let currentStock = 0;
+        let productData: any = null;
+        const prodDocRef = doc(db, "products", productId);
+
         // A. Cập nhật trong Firestore
         try {
-          const productDocRef = fsDoc(db, "products", productId);
-          const productSnap = await getDoc(productDocRef);
+          const productSnap = await getDoc(prodDocRef);
           
-          let currentStock = 0;
-          let productData: any = null;
-
           if (productSnap.exists()) {
             productData = productSnap.data();
             currentStock = Number(productData.stock) || 0;
@@ -233,10 +238,11 @@ export async function POST(request: Request) {
             ...productData,
             stock: newStock,
             status: newStock > 15 ? 'Active' : 'Low stock',
-            updatedAt: new Date().toLocaleDateString('vi-VN')
+            updatedAt: new Date().toLocaleDateString('vi-VN'),
+            syncStatus: "pending"
           };
 
-          await fsSetDoc(productDocRef, updatedProduct);
+          await setDoc(prodDocRef, updatedProduct);
           console.log(`Updated Firestore stock for ${productId} to: ${newStock}`);
         } catch (fsProdErr) {
           console.error("Failed to update product stock in Firestore:", fsProdErr);
@@ -256,7 +262,8 @@ export async function POST(request: Request) {
                   ...p,
                   stock: updatedStock,
                   status: updatedStock > 15 ? 'Active' : 'Low stock',
-                  updatedAt: new Date().toLocaleDateString('vi-VN')
+                  updatedAt: new Date().toLocaleDateString('vi-VN'),
+                  syncStatus: "pending"
                 };
               }
               return p;
@@ -269,10 +276,10 @@ export async function POST(request: Request) {
           console.error("Failed to update product stock in local cache:", cacheProdErr);
         }
 
-        // C. Gửi webhook sang Google Sheets
+        // C. Gửi webhook sang Google Sheets để đồng bộ stock
         if (webhookUrl && webhookSecret) {
           try {
-            await fetch(webhookUrl, {
+            const stockRes = await fetch(webhookUrl, {
               method: "POST",
               headers: { "Content-Type": "text/plain;charset=utf-8" },
               body: JSON.stringify({
@@ -284,9 +291,36 @@ export async function POST(request: Request) {
               redirect: "follow",
               cache: "no-store",
             });
-            console.log("Sent stock deduction webhook request to Sheets.");
-          } catch (sheetDeductErr) {
-            console.error("Failed to send stock deduction webhook to Sheets:", sheetDeductErr);
+
+            const stockText = await stockRes.text();
+            let parsedStock: any = {};
+            try { parsedStock = JSON.parse(stockText); } catch (e) {}
+
+            if (stockRes.ok && parsedStock.ok !== false) {
+              await updateDoc(prodDocRef, {
+                syncStatus: "synced",
+                syncError: null,
+                lastSyncedAt: new Date().toISOString(),
+              });
+            } else {
+              const errMsg = parsedStock.message || `HTTP Status ${stockRes.status}`;
+              console.error(`[Order Submit API] [${timestamp}] Google Sheet product stock update failed for product ID: ${productId}. Error: ${errMsg}`);
+              await updateDoc(prodDocRef, {
+                syncStatus: "failed",
+                syncError: errMsg,
+                lastSyncedAt: new Date().toISOString(),
+              });
+            }
+          } catch (sheetDeductErr: any) {
+            const errMsg = sheetDeductErr.message || String(sheetDeductErr);
+            console.error(`[Order Submit API] [${timestamp}] Google Sheet product stock update failed for product ID: ${productId}. Error: ${errMsg}`);
+            try {
+              await updateDoc(prodDocRef, {
+                syncStatus: "failed",
+                syncError: errMsg,
+                lastSyncedAt: new Date().toISOString(),
+              });
+            } catch (e) {}
           }
         }
       }
@@ -295,57 +329,86 @@ export async function POST(request: Request) {
     }
 
     // 3. Gửi Webhook tới Google Sheet
-    const googleResponse = await fetch(webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-      },
-      body: JSON.stringify({
-        action: "create",
-        ...order,
-        secret: webhookSecret,
-      }),
-      redirect: "follow",
-      cache: "no-store",
-    });
-
-    const googleText = await googleResponse.text();
-
-    console.log("Google Sheet response:", {
-      status: googleResponse.status,
-      ok: googleResponse.ok,
-      text: googleText,
-    });
-
-    let googleResult: {
-      ok?: boolean;
-      message?: string;
-    } | null = null;
-
-    try {
-      googleResult = JSON.parse(googleText);
-    } catch {
-      googleResult = null;
-    }
-
     let finalResponseStatus = 200;
     let finalResponseBody = {
       ok: true,
       message: "Đơn hàng đã được lưu vào Google Sheet.",
     };
 
-    if (!googleResponse.ok) {
+    try {
+      const googleResponse = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8",
+        },
+        body: JSON.stringify({
+          action: "create",
+          ...order,
+          secret: webhookSecret,
+        }),
+        redirect: "follow",
+        cache: "no-store",
+      });
+
+      const googleText = await googleResponse.text();
+
+      console.log("Google Sheet response:", {
+        status: googleResponse.status,
+        ok: googleResponse.ok,
+        text: googleText,
+      });
+
+      let googleResult: {
+        ok?: boolean;
+        message?: string;
+      } | null = null;
+
+      try {
+        googleResult = JSON.parse(googleText);
+      } catch {
+        googleResult = null;
+      }
+
+      if (!googleResponse.ok) {
+        finalResponseStatus = 500;
+        finalResponseBody = {
+          ok: false,
+          message: "Google Apps Script trả về lỗi HTTP.",
+        };
+        throw new Error(`Google Apps Script returned HTTP ${googleResponse.status}`);
+      } else if (googleResult && googleResult.ok === false) {
+        finalResponseStatus = 500;
+        finalResponseBody = {
+          ok: false,
+          message: googleResult.message || "Google Sheet từ chối lưu đơn.",
+        };
+        throw new Error(googleResult.message || "Google Sheet rejected order save.");
+      }
+
+      // Sync order succeeded
+      await updateDoc(orderDocRef, {
+        syncStatus: "synced",
+        syncError: null,
+        lastSyncedAt: new Date().toISOString(),
+      });
+
+    } catch (sheetErr: any) {
+      const errMsg = sheetErr.message || String(sheetErr);
+      console.error(`[Order Submit API] [${timestamp}] Google Sheet order submission failed for order ID: ${orderId}. Error: ${errMsg}`);
+      
       finalResponseStatus = 500;
       finalResponseBody = {
         ok: false,
-        message: "Google Apps Script trả về lỗi HTTP.",
+        message: "Không thể lưu đơn hàng vào Google Sheets: " + errMsg,
       };
-    } else if (googleResult && googleResult.ok === false) {
-      finalResponseStatus = 500;
-      finalResponseBody = {
-        ok: false,
-        message: googleResult.message || "Google Sheet từ chối lưu đơn.",
-      };
+
+      try {
+        await updateDoc(orderDocRef, {
+          syncStatus: "failed",
+          syncError: errMsg,
+          lastSyncedAt: new Date().toISOString(),
+        });
+      } catch (e) {}
     }
 
     // Cập nhật bản ghi hoàn thành "resolved" vào bộ nhớ đệm
@@ -368,8 +431,8 @@ export async function POST(request: Request) {
       status: finalResponseStatus,
       headers: responseHeaders,
     });
-  } catch (error) {
-    console.error("Order submit error:", error);
+  } catch (error: any) {
+    console.error(`[Order Submit API] [${timestamp}] Order submit error:`, error.message || error);
 
     return NextResponse.json(
       {
