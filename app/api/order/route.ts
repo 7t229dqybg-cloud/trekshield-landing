@@ -161,6 +161,7 @@ export async function POST(request: Request) {
       syncStatus: "pending",
       syncError: null,
       updatedAt: new Date().toISOString(),
+      paymentMethod: "Tiền mặt",
     };
 
     // 1. Lưu đơn hàng vào Firestore
@@ -171,30 +172,32 @@ export async function POST(request: Request) {
       console.error("Firestore save error:", fsError.message || fsError);
     }
 
-    // 2. Lưu đơn hàng vào file cache nội bộ làm fallback
-    try {
-      const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
-      
-      // Đảm bảo thư mục tồn tại
-      const dirPath = path.dirname(cacheFilePath);
-      if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
-      }
+    // 2. Lưu đơn hàng vào file cache nội bộ làm fallback (chỉ chạy ở dev local)
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
+        
+        // Đảm bảo thư mục tồn tại
+        const dirPath = path.dirname(cacheFilePath);
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true });
+        }
 
-      let cachedOrders = [];
-      if (fs.existsSync(cacheFilePath)) {
-        const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
-        cachedOrders = JSON.parse(fileContent || '[]');
+        let cachedOrders = [];
+        if (fs.existsSync(cacheFilePath)) {
+          const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
+          cachedOrders = JSON.parse(fileContent || '[]');
+        }
+        
+        // Đồng bộ sử dụng chung ID thực tế
+        const newLocalOrder = { ...order };
+        cachedOrders.unshift(newLocalOrder);
+        
+        fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
+        console.log("Order saved to local cache successfully.");
+      } catch (cacheError) {
+        console.error("Local order cache error:", cacheError);
       }
-      
-      // Đồng bộ sử dụng chung ID thực tế
-      const newLocalOrder = { ...order };
-      cachedOrders.unshift(newLocalOrder);
-      
-      fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
-      console.log("Order saved to local cache successfully.");
-    } catch (cacheError) {
-      console.error("Local order cache error:", cacheError);
     }
 
     // --- KHẤU TRỪ TỒN KHO SẢN PHẨM ---
@@ -248,32 +251,34 @@ export async function POST(request: Request) {
           console.error("Failed to update product stock in Firestore:", fsProdErr);
         }
 
-        // B. Cập nhật trong local cache sản phẩm
-        try {
-          const prodCachePath = path.join(process.cwd(), 'app/lib/products-cache.json');
-          if (fs.existsSync(prodCachePath)) {
-            const fileContent = fs.readFileSync(prodCachePath, 'utf8');
-            let cachedProducts = JSON.parse(fileContent || '[]');
-            
-            cachedProducts = cachedProducts.map((p: any) => {
-              if (p.id === productId) {
-                const updatedStock = Math.max(0, p.stock - qtyNum);
-                return {
-                  ...p,
-                  stock: updatedStock,
-                  status: updatedStock > 15 ? 'Active' : 'Low stock',
-                  updatedAt: new Date().toLocaleDateString('vi-VN'),
-                  syncStatus: "pending"
-                };
-              }
-              return p;
-            });
+        // B. Cập nhật trong local cache sản phẩm (chỉ chạy ở dev local)
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            const prodCachePath = path.join(process.cwd(), 'app/lib/products-cache.json');
+            if (fs.existsSync(prodCachePath)) {
+              const fileContent = fs.readFileSync(prodCachePath, 'utf8');
+              let cachedProducts = JSON.parse(fileContent || '[]');
+              
+              cachedProducts = cachedProducts.map((p: any) => {
+                if (p.id === productId) {
+                  const updatedStock = Math.max(0, p.stock - qtyNum);
+                  return {
+                    ...p,
+                    stock: updatedStock,
+                    status: updatedStock > 15 ? 'Active' : 'Low stock',
+                    updatedAt: new Date().toLocaleDateString('vi-VN'),
+                    syncStatus: "pending"
+                  };
+                }
+                return p;
+              });
 
-            fs.writeFileSync(prodCachePath, JSON.stringify(cachedProducts, null, 2), 'utf8');
-            console.log("Updated product stock in local cache.");
+              fs.writeFileSync(prodCachePath, JSON.stringify(cachedProducts, null, 2), 'utf8');
+              console.log("Updated product stock in local cache.");
+            }
+          } catch (cacheProdErr) {
+            console.error("Failed to update product stock in local cache:", cacheProdErr);
           }
-        } catch (cacheProdErr) {
-          console.error("Failed to update product stock in local cache:", cacheProdErr);
         }
 
         // C. Gửi webhook sang Google Sheets để đồng bộ stock

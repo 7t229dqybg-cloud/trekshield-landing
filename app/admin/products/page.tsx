@@ -23,10 +23,28 @@ export default function AdminProductsPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [loadingProductId, setLoadingProductId] = useState<string | null>(null);
 
+  const triggerSync = async (silent = false) => {
+    if (!silent) setIsSyncing(true);
+    try {
+      const res = await fetch("/api/admin/products/sync", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data && data.ok) {
+        console.log("3-way products sync completed:", data.stats);
+      } else {
+        console.error("Products sync failed:", data.message);
+      }
+    } catch (err) {
+      console.error("Error triggering products sync:", err);
+    } finally {
+      if (!silent) setIsSyncing(false);
+    }
+  };
+
   // 1. Tự động đồng bộ và nạp dữ liệu khi mount
   useEffect(() => {
     let localProductsList: Product[] = [];
-    setIsLoading(true);
 
     async function loadLocalProducts() {
       try {
@@ -88,31 +106,12 @@ export default function AdminProductsPage() {
     });
 
     // Kích hoạt đồng bộ kho 3 bên tự động lúc nạp trang
-    triggerSync(true);
+    setTimeout(() => triggerSync(true), 0);
 
     return () => {
       if (unsubscribeFirestore) unsubscribeFirestore();
     };
   }, []);
-
-  const triggerSync = async (silent = false) => {
-    if (!silent) setIsSyncing(true);
-    try {
-      const res = await fetch("/api/admin/products/sync", {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (data && data.ok) {
-        console.log("3-way products sync completed:", data.stats);
-      } else {
-        console.error("Products sync failed:", data.message);
-      }
-    } catch (err) {
-      console.error("Error triggering products sync:", err);
-    } finally {
-      if (!silent) setIsSyncing(false);
-    }
-  };
 
   const handleRestock = async (id: string) => {
     setLoadingProductId(id);

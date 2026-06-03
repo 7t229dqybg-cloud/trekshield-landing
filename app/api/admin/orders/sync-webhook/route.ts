@@ -13,6 +13,7 @@ export async function POST(request: Request) {
   try {
     const data = await request.json();
     const { action, secret, id, phone, customer, name, product, quantity, qty, total, location, note, status, date, createdAt } = data;
+    const paymentMethod = data.paymentMethod || data.payment_method || data.hinhThucThanhToan || data["Hình thức thanh toán"] || "Tiền mặt";
 
     // Xác thực secret key để đảm bảo an toàn bảo mật dữ liệu
     const webhookSecret = process.env.ORDER_WEBHOOK_SECRET;
@@ -45,18 +46,20 @@ export async function POST(request: Request) {
         }
       }
 
-      // 2. Đồng bộ XÓA vào file cache cục bộ
-      try {
-        const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
-        if (fs.existsSync(cacheFilePath)) {
-          const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
-          let cachedOrders = JSON.parse(fileContent || '[]');
-          cachedOrders = cachedOrders.filter((o: any) => o.id !== id && o.phone !== phone);
-          fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
-          console.log("Sync deleted local cache order.");
+      // 2. Đồng bộ XÓA vào file cache cục bộ (chỉ chạy ở dev local)
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
+          if (fs.existsSync(cacheFilePath)) {
+            const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
+            let cachedOrders = JSON.parse(fileContent || '[]');
+            cachedOrders = cachedOrders.filter((o: any) => o.id !== id && o.phone !== phone);
+            fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
+            console.log("Sync deleted local cache order.");
+          }
+        } catch (cacheErr) {
+          console.error("Sync delete in cache failed:", cacheErr);
         }
-      } catch (cacheErr) {
-        console.error("Sync delete in cache failed:", cacheErr);
       }
     } 
     
@@ -77,18 +80,20 @@ export async function POST(request: Request) {
         }
       }
 
-      // 2. Đồng bộ CẬP NHẬT vào file cache cục bộ
-      try {
-        const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
-        if (fs.existsSync(cacheFilePath)) {
-          const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
-          let cachedOrders = JSON.parse(fileContent || '[]');
-          cachedOrders = cachedOrders.map((o: any) => (o.id === id || o.phone === phone) ? { ...o, ...updateData } : o);
-          fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
-          console.log(`Sync updated local cache order ${id} to status ${status}`);
+      // 2. Đồng bộ CẬP NHẬT vào file cache cục bộ (chỉ chạy ở dev local)
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
+          if (fs.existsSync(cacheFilePath)) {
+            const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
+            let cachedOrders = JSON.parse(fileContent || '[]');
+            cachedOrders = cachedOrders.map((o: any) => (o.id === id || o.phone === phone) ? { ...o, ...updateData } : o);
+            fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
+            console.log(`Sync updated local cache order ${id} to status ${status}`);
+          }
+        } catch (cacheErr) {
+          console.error("Sync update in cache failed:", cacheErr);
         }
-      } catch (cacheErr) {
-        console.error("Sync update in cache failed:", cacheErr);
       }
     } 
     
@@ -108,6 +113,7 @@ export async function POST(request: Request) {
         source: "google-sheet-sync",
         date: date || new Date().toLocaleDateString('vi-VN'),
         createdAt: createdAt || new Date().toISOString(),
+        paymentMethod: paymentMethod || "Tiền mặt",
         ...syncMetadata,
       };
 
@@ -121,22 +127,24 @@ export async function POST(request: Request) {
         }
       }
 
-      // 2. Đồng bộ THÊM/GHI ĐÈ vào file cache cục bộ
-      try {
-        const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
-        if (fs.existsSync(cacheFilePath)) {
-          const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
-          let cachedOrders = JSON.parse(fileContent || '[]');
-          
-          // Tránh trùng lặp
-          cachedOrders = cachedOrders.filter((o: any) => o.id !== syncId);
-          cachedOrders.unshift(order);
-          
-          fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
-          console.log("Sync created/overrode local cache order.");
+      // 2. Đồng bộ THÊM/GHI ĐÈ vào file cache cục bộ (chỉ chạy ở dev local)
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
+          if (fs.existsSync(cacheFilePath)) {
+            const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
+            let cachedOrders = JSON.parse(fileContent || '[]');
+            
+            // Tránh trùng lặp
+            cachedOrders = cachedOrders.filter((o: any) => o.id !== syncId);
+            cachedOrders.unshift(order);
+            
+            fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
+            console.log("Sync created/overrode local cache order.");
+          }
+        } catch (cacheErr) {
+          console.error("Sync write in cache failed:", cacheErr);
         }
-      } catch (cacheErr) {
-        console.error("Sync write in cache failed:", cacheErr);
       }
     }
 

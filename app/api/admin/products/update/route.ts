@@ -57,32 +57,34 @@ export async function POST(request: Request) {
       console.error(`[Product Update API] [${timestamp}] Error updating product ${id} in Firestore:`, fsError.message || fsError);
     }
 
-    // 2. Cập nhật trong cache local
-    try {
-      const cacheFilePath = path.join(process.cwd(), 'app/lib/products-cache.json');
-      if (fs.existsSync(cacheFilePath)) {
-        const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
-        let cachedProducts = JSON.parse(fileContent || '[]');
-        
-        cachedProducts = cachedProducts.map((p: any) => {
-          if (p.id === id) {
-            const finalStock = change !== undefined ? Math.max(0, p.stock + change) : stock;
-            return {
-              ...p,
-              stock: finalStock,
-              status: finalStock > 15 ? 'Active' : 'Low stock',
-              updatedAt: new Date().toLocaleDateString('vi-VN'),
-              syncStatus: "pending"
-            };
-          }
-          return p;
-        });
+    // 2. Cập nhật trong cache local (chỉ chạy ở dev local)
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const cacheFilePath = path.join(process.cwd(), 'app/lib/products-cache.json');
+        if (fs.existsSync(cacheFilePath)) {
+          const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
+          let cachedProducts = JSON.parse(fileContent || '[]');
+          
+          cachedProducts = cachedProducts.map((p: any) => {
+            if (p.id === id) {
+              const finalStock = change !== undefined ? Math.max(0, p.stock + change) : stock;
+              return {
+                ...p,
+                stock: finalStock,
+                status: finalStock > 15 ? 'Active' : 'Low stock',
+                updatedAt: new Date().toLocaleDateString('vi-VN'),
+                syncStatus: "pending"
+              };
+            }
+            return p;
+          });
 
-        fs.writeFileSync(cacheFilePath, JSON.stringify(cachedProducts, null, 2), 'utf8');
-        console.log(`Updated local products cache for ${id}.`);
+          fs.writeFileSync(cacheFilePath, JSON.stringify(cachedProducts, null, 2), 'utf8');
+          console.log(`Updated local products cache for ${id}.`);
+        }
+      } catch (cacheError) {
+        console.error("Error updating local products cache:", cacheError);
       }
-    } catch (cacheError) {
-      console.error("Error updating local products cache:", cacheError);
     }
 
     // 3. Gửi đồng bộ sang Google Sheets

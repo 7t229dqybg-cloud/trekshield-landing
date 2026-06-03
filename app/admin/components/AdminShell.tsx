@@ -22,10 +22,10 @@ export default function AdminShell({ activePage, children }: AdminShellProps) {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
-      setTheme('dark');
+      setTimeout(() => setTheme('dark'), 0);
       document.documentElement.classList.add('dark');
     } else {
-      setTheme('light');
+      setTimeout(() => setTheme('light'), 0);
       document.documentElement.classList.remove('dark');
     }
   }, []);

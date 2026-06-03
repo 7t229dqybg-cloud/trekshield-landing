@@ -18,6 +18,7 @@
   --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-shimmer: shimmer-anim 2s infinite linear;
   --animate-glow: glow-anim 4s ease-in-out infinite;
+  --animate-scanLine: scanLine-anim 2.5s ease-in-out infinite;
 
   @keyframes float-anim {
     0%, 100% { transform: translateY(0px) rotate(0deg); }
@@ -30,6 +31,11 @@
   @keyframes glow-anim {
     0%, 100% { box-shadow: 0 0 15px rgba(15, 107, 79, 0.15); }
     50% { box-shadow: 0 0 30px rgba(15, 107, 79, 0.35); }
+  }
+  @keyframes scanLine-anim {
+    0%, 100% { top: 0%; opacity: 0; }
+    5%, 95% { opacity: 1; }
+    50% { top: 100%; }
   }
 }
 

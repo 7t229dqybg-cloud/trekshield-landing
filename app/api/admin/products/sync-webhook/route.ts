@@ -60,45 +60,47 @@ export async function POST(request: Request) {
           console.error(`[Products Sync Webhook API] [${timestamp}] Sync-webhook failed to update Firestore:`, fsErr.message || fsErr);
         }
 
-        // 2. Cập nhật cache local
-        try {
-          const cacheFilePath = path.join(process.cwd(), 'app/lib/products-cache.json');
-          if (fs.existsSync(cacheFilePath)) {
-            const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
-            let cachedProducts = JSON.parse(fileContent || '[]');
-            
-            const exists = cachedProducts.some((p: any) => p.id === id);
-            if (exists) {
-              cachedProducts = cachedProducts.map((p: any) => {
-                if (p.id === id) {
-                  return {
-                    ...p,
-                    stock: prodStock,
-                    status: prodStock > 15 ? 'Active' : 'Low stock',
-                    ...syncMetadata,
-                    updatedAt: updatedAt || syncMetadata.updatedAt,
-                  };
-                }
-                return p;
-              });
-            } else {
-              cachedProducts.push({
-                id,
-                name: name || id,
-                stock: prodStock,
-                price: price || "180K",
-                type: type || "Sáp",
-                status: prodStock > 15 ? 'Active' : 'Low stock',
-                ...syncMetadata,
-                updatedAt: updatedAt || syncMetadata.updatedAt,
-              });
-            }
+        // 2. Cập nhật cache local (chỉ chạy ở dev local)
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            const cacheFilePath = path.join(process.cwd(), 'app/lib/products-cache.json');
+            if (fs.existsSync(cacheFilePath)) {
+              const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
+              let cachedProducts = JSON.parse(fileContent || '[]');
+              
+              const exists = cachedProducts.some((p: any) => p.id === id);
+              if (exists) {
+                cachedProducts = cachedProducts.map((p: any) => {
+                  if (p.id === id) {
+                    return {
+                      ...p,
+                      stock: prodStock,
+                      status: prodStock > 15 ? 'Active' : 'Low stock',
+                      ...syncMetadata,
+                      updatedAt: updatedAt || syncMetadata.updatedAt,
+                    };
+                  }
+                  return p;
+                });
+              } else {
+                cachedProducts.push({
+                  id,
+                  name: name || id,
+                  stock: prodStock,
+                  price: price || "180K",
+                  type: type || "Sáp",
+                  status: prodStock > 15 ? 'Active' : 'Low stock',
+                  ...syncMetadata,
+                  updatedAt: updatedAt || syncMetadata.updatedAt,
+                });
+              }
 
-            fs.writeFileSync(cacheFilePath, JSON.stringify(cachedProducts, null, 2), 'utf8');
-            console.log(`Sync-webhook updated local cache for product ${id}.`);
+              fs.writeFileSync(cacheFilePath, JSON.stringify(cachedProducts, null, 2), 'utf8');
+              console.log(`Sync-webhook updated local cache for product ${id}.`);
+            }
+          } catch (cacheErr) {
+            console.error("Sync-webhook failed to update local cache:", cacheErr);
           }
-        } catch (cacheErr) {
-          console.error("Sync-webhook failed to update local cache:", cacheErr);
         }
       }
     }

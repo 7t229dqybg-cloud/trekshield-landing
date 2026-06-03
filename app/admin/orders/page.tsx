@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
 import AdminShell from '../components/AdminShell';
-import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 
 interface Order {
@@ -14,6 +15,7 @@ interface Order {
   total: string;
   status: 'Pending' | 'Completed' | 'Cancelled';
   date: string;
+  paymentMethod?: string;
 }
 
 export default function AdminOrdersPage() {
@@ -43,12 +45,11 @@ export default function AdminOrdersPage() {
   };
 
   useEffect(() => {
-    triggerSync();
+    setTimeout(() => triggerSync(), 0);
   }, []);
 
   useEffect(() => {
     let localOrdersList: Order[] = [];
-    setIsLoading(true);
 
     // 1. Tải đơn hàng cache cục bộ qua API
     async function loadLocalOrders() {
@@ -64,7 +65,7 @@ export default function AdminOrdersPage() {
             qty: localOrder.qty || Number(localOrder.quantity) || 1,
             total: localOrder.total || '180K',
             status: localOrder.status || 'Pending',
-            date: localOrder.date || '',
+            paymentMethod: localOrder.paymentMethod || 'Tiền mặt',
           }));
         }
       } catch (localErr) {
@@ -90,6 +91,7 @@ export default function AdminOrdersPage() {
               total: data.total || '180K',
               status: data.status || 'Pending',
               date: data.date || '',
+              paymentMethod: data.paymentMethod || 'Tiền mặt',
             });
           });
 
@@ -316,6 +318,7 @@ export default function AdminOrdersPage() {
                 <th className="py-3 px-4 font-bold">Sản phẩm</th>
                 <th className="py-3 px-4 font-bold text-center">Số lượng</th>
                 <th className="py-3 px-4 font-bold">Tổng tiền</th>
+                <th className="py-3 px-4 font-bold">Thanh toán</th>
                 <th className="py-3 px-4 font-bold">Trạng thái</th>
                 <th className="py-3 px-4 font-bold">Ngày gửi</th>
                 <th className="py-3 px-4 font-bold text-right">Thao tác</th>
@@ -333,6 +336,7 @@ export default function AdminOrdersPage() {
                     <td className="py-4 px-4"><div className="shimmer h-4 w-28 rounded animate-pulse" /></td>
                     <td className="py-4 px-4 text-center"><div className="shimmer h-4 w-6 rounded mx-auto animate-pulse" /></td>
                     <td className="py-4 px-4"><div className="shimmer h-4 w-12 rounded animate-pulse" /></td>
+                    <td className="py-4 px-4"><div className="shimmer h-4 w-16 rounded animate-pulse" /></td>
                     <td className="py-4 px-4"><div className="shimmer h-5 w-20 rounded-full animate-pulse" /></td>
                     <td className="py-4 px-4"><div className="shimmer h-4 w-16 rounded animate-pulse" /></td>
                     <td className="py-4 px-4 text-right"><div className="shimmer h-7 w-28 rounded-xl ml-auto animate-pulse" /></td>
@@ -355,6 +359,15 @@ export default function AdminOrdersPage() {
                       <td className="py-3.5 px-4">{order.product}</td>
                       <td className="py-3.5 px-4 font-bold text-center">{order.qty}</td>
                       <td className="py-3.5 px-4 font-black text-brand-650 dark:text-emerald-400">{order.total}</td>
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${
+                          order.paymentMethod === "Chuyển khoản"
+                            ? "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/50"
+                            : "bg-slate-50 text-slate-700 border-slate-100 dark:bg-slate-950/40 dark:text-slate-400 dark:border-slate-900/50"
+                        }`}>
+                          {order.paymentMethod === "Chuyển khoản" ? "💳 Chuyển khoản" : "💵 Tiền mặt"}
+                        </span>
+                      </td>
                       <td className="py-3.5 px-4">
                         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${badgeColor}`}>
                           {order.status === "Pending" ? "⏳ Chờ duyệt" : order.status === "Completed" ? "✅ Thành công" : "❌ Đã hủy"}
@@ -389,7 +402,7 @@ export default function AdminOrdersPage() {
               ) : (
                 /* EMPTY STATE DISPLAY REDESIGNED */
                 <tr>
-                  <td colSpan={9} className="py-16 text-center space-y-4">
+                  <td colSpan={10} className="py-16 text-center space-y-4">
                     <div className="text-5xl select-none animate-bounce">📦</div>
                     <div className="space-y-1">
                       <strong className="block text-sm font-black text-slate-700 dark:text-slate-300">

@@ -13,17 +13,14 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   // Synchronize dark theme state with local storage
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
-      setTheme('dark');
       document.documentElement.classList.add('dark');
     } else {
-      setTheme('light');
       document.documentElement.classList.remove('dark');
     }
   }, []);
@@ -51,7 +48,7 @@ export default function AdminLoginPage() {
     } catch (err) {
       const authError = err as { code?: string };
       console.error("Lỗi đăng nhập Firebase:", authError);
-      
+
       switch (authError.code) {
         case 'auth/invalid-email':
           setErrorMsg("Địa chỉ email không đúng định dạng.");
@@ -93,14 +90,14 @@ export default function AdminLoginPage() {
       <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-emerald-500/5 dark:bg-emerald-500/10 blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl p-8 lg:p-10 shadow-2xl relative transition-all duration-300">
-        
+
         {/* Header/Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex w-16 h-16 rounded-2xl bg-brand-50 dark:bg-brand-900/40 text-brand-600 dark:text-emerald-400 text-3xl items-center justify-center mb-4 shadow-sm select-none">
             🛡️
           </div>
           <h1 className="text-2xl font-black text-slate-950 dark:text-white tracking-tight leading-none">
-            TrekShield Admin
+            TrekShield
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium">
             Đăng nhập hệ thống quản trị TrekShield Wax

@@ -24,7 +24,14 @@ export async function GET() {
       return dateB - dateA;
     });
 
-    return NextResponse.json({ ok: true, orders });
+    return NextResponse.json(
+      { ok: true, orders },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   } catch (e) {
     console.error("Error reading orders from Firestore, falling back to cache:", e);
     // Fallback to cache file
@@ -38,6 +45,13 @@ export async function GET() {
     } catch (cacheErr) {
       console.error("Error reading orders cache file:", cacheErr);
     }
-    return NextResponse.json({ ok: true, orders: cachedOrders });
+    return NextResponse.json(
+      { ok: true, orders: cachedOrders },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   }
 }

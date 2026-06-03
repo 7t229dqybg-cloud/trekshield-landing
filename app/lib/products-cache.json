@@ -1,35 +1,47 @@
 [
   {
     "id": "super-wax",
-    "type": "Sáp",
-    "updatedAt": "Wed Jun 03 2026 00:00:00 GMT+0700 (Giờ Đông Dương)",
-    "badge": "Phù hợp người mới",
-    "price": "160K",
-    "status": "Active",
     "description": "Dễ thoa, nhanh khô, không làm đổi màu quần áo và linh hoạt trên nhiều loại vải.",
-    "stock": 100,
-    "name": "super-wax"
+    "status": "Active",
+    "price": "160K",
+    "badge": "Phù hợp người mới",
+    "lastSyncedAt": "2026-06-03T04:50:30.178Z",
+    "stock": 88,
+    "source": "google-sheet-sync",
+    "type": "Sáp",
+    "name": "super-wax",
+    "updatedAt": "2026-06-03T04:50:30.178Z",
+    "syncStatus": "synced",
+    "syncError": null
   },
   {
     "id": "premium-wax",
-    "stock": 100,
+    "syncError": null,
+    "syncStatus": "synced",
+    "updatedAt": "2026-06-03T04:50:30.361Z",
     "name": "premium-wax",
+    "type": "Sáp",
+    "source": "google-sheet-sync",
+    "lastSyncedAt": "2026-06-03T04:50:30.361Z",
+    "stock": 90,
+    "badge": "Bám lâu",
     "price": "180K",
     "status": "Active",
-    "description": "Chống nước vượt trội, bám lâu, độ bền cao, phù hợp vải chuyên dụng.",
-    "updatedAt": "Wed Jun 03 2026 00:00:00 GMT+0700 (Giờ Đông Dương)",
-    "badge": "Bám lâu",
-    "type": "Sáp"
+    "description": "Chống nước vượt trội, bám lâu, độ bền cao, phù hợp vải chuyên dụng."
   },
   {
     "id": "combo-trekshield",
-    "type": "Sáp",
-    "updatedAt": "Wed Jun 03 2026 00:00:00 GMT+0700 (Giờ Đông Dương)",
-    "badge": "Bán chạy",
     "description": "Bộ đôi linh hoạt cho nhiều loại đồ outdoor, balô, áo khoác, giày vải và túi canvas.",
-    "price": "329K",
     "status": "Active",
+    "price": "329K",
+    "badge": "Bán chạy",
+    "lastSyncedAt": "2026-06-03T04:50:30.466Z",
+    "stock": 90,
+    "source": "google-sheet-sync",
+    "type": "Sáp",
     "name": "combo-trekshield",
-    "stock": 100
+    "updatedAt": "2026-06-03T04:50:30.466Z",
+    "syncStatus": "synced",
+    "syncError": null
   }
 ]

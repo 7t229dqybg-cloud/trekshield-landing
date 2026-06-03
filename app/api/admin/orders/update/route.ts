@@ -36,18 +36,20 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Cập nhật trong file cache cục bộ
-    try {
-      const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
-      if (fs.existsSync(cacheFilePath)) {
-        const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
-        let cachedOrders = JSON.parse(fileContent || '[]');
-        cachedOrders = cachedOrders.map((o: any) => o.id === id ? { ...o, ...syncMetadataInit } : o);
-        fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
-        console.log(`Updated order ${id} status to ${status} in local cache.`);
+    // 2. Cập nhật trong file cache cục bộ (chỉ chạy ở dev local)
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
+        if (fs.existsSync(cacheFilePath)) {
+          const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
+          let cachedOrders = JSON.parse(fileContent || '[]');
+          cachedOrders = cachedOrders.map((o: any) => o.id === id ? { ...o, ...syncMetadataInit } : o);
+          fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
+          console.log(`Updated order ${id} status to ${status} in local cache.`);
+        }
+      } catch (cacheError) {
+        console.error("Error updating local cache for update:", cacheError);
       }
-    } catch (cacheError) {
-      console.error("Error updating local cache for update:", cacheError);
     }
 
     // 3. Gửi webhook yêu cầu cập nhật đơn hàng trên Google Sheets

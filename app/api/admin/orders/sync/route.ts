@@ -118,6 +118,7 @@ export async function POST(request: Request) {
           source: "google-sheet-sync",
           date: sheetOrder.date || new Date().toLocaleDateString('vi-VN'),
           createdAt: sheetOrder.createdAt || new Date().toISOString(),
+          paymentMethod: sheetOrder.paymentMethod || sheetOrder.payment_method || sheetOrder.hinhThucThanhToan || sheetOrder["Hình thức thanh toán"] || "Tiền mặt",
           // Sync metadata
           sheetRowId: sheetOrder.rowId || sheetOrder.rowNumber || null,
           lastSyncedAt: new Date().toISOString(),
@@ -185,6 +186,7 @@ export async function POST(request: Request) {
             source: sheetOrder.source || "google-sheet-sync",
             date: sheetOrder.date || new Date().toLocaleDateString('vi-VN'),
             createdAt: sheetOrder.createdAt || new Date().toISOString(),
+            paymentMethod: sheetOrder.paymentMethod || sheetOrder.payment_method || sheetOrder.hinhThucThanhToan || sheetOrder["Hình thức thanh toán"] || "Tiền mặt",
             // Sync metadata
             sheetRowId: sheetOrder.rowId || sheetOrder.rowNumber || null,
             lastSyncedAt: new Date().toISOString(),
@@ -306,16 +308,18 @@ export async function POST(request: Request) {
       return dateB - dateA;
     });
 
-    // Ghi cache
-    try {
-      const dirPath = path.dirname(cacheFilePath);
-      if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
+    // Ghi cache (chỉ chạy ở dev local)
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const dirPath = path.dirname(cacheFilePath);
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true });
+        }
+        fs.writeFileSync(cacheFilePath, JSON.stringify(finalOrdersList, null, 2), 'utf8');
+        console.log("3-way sync complete. Local cache updated with", finalOrdersList.length, "orders.");
+      } catch (cacheWriteErr) {
+        console.error("Failed to write to local cache file during sync:", cacheWriteErr);
       }
-      fs.writeFileSync(cacheFilePath, JSON.stringify(finalOrdersList, null, 2), 'utf8');
-      console.log("3-way sync complete. Local cache updated with", finalOrdersList.length, "orders.");
-    } catch (cacheWriteErr) {
-      console.error("Failed to write to local cache file during sync:", cacheWriteErr);
     }
 
     return NextResponse.json({

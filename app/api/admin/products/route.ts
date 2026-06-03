@@ -25,7 +25,14 @@ export async function GET() {
         "combo-trekshield": 3
       };
       products.sort((a, b) => (orderMap[a.id] || 99) - (orderMap[b.id] || 99));
-      return NextResponse.json({ ok: true, products });
+      return NextResponse.json(
+        { ok: true, products },
+        {
+          headers: {
+            "Cache-Control": "no-store, max-age=0, must-revalidate",
+          },
+        }
+      );
     }
     throw new Error("No products found in Firestore");
   } catch (e) {
@@ -41,6 +48,13 @@ export async function GET() {
     } catch (cacheErr) {
       console.error("Error reading products cache file:", cacheErr);
     }
-    return NextResponse.json({ ok: true, products: cachedProducts });
+    return NextResponse.json(
+      { ok: true, products: cachedProducts },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   }
 }

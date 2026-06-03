@@ -178,13 +178,15 @@ export async function POST(request: Request) {
       cachedProductMap.set(id, { ...finalProductData, ...syncMetadata });
     }
 
-    // Ghi ngược lại tệp cache cục bộ
-    const finalCacheList = Array.from(cachedProductMap.values());
-    try {
-      fs.writeFileSync(cacheFilePath, JSON.stringify(finalCacheList, null, 2), 'utf8');
-      console.log("Local products cache updated successfully during sync.");
-    } catch (e) {
-      console.error(e);
+    // Ghi ngược lại tệp cache cục bộ (chỉ chạy ở dev local)
+    if (process.env.NODE_ENV === 'development') {
+      const finalCacheList = Array.from(cachedProductMap.values());
+      try {
+        fs.writeFileSync(cacheFilePath, JSON.stringify(finalCacheList, null, 2), 'utf8');
+        console.log("Local products cache updated successfully during sync.");
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     return NextResponse.json({ ok: true, message: "Đồng bộ tồn kho sản phẩm hoàn tất.", stats });

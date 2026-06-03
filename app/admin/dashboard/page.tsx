@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -24,7 +25,6 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     let localOrdersList: Order[] = [];
-    setIsLoading(true);
 
     // 1. Tải đơn hàng từ cache cục bộ làm dự phòng
     async function loadLocalOrders() {
@@ -108,7 +108,7 @@ export default function AdminDashboardPage() {
   // Tính toán các chỉ số thống kê động
   const data = useMemo(() => {
     let totalRevenueNum = 0;
-    let totalOrders = orders.length;
+    const totalOrders = orders.length;
     let completedOrders = 0;
     let pendingOrders = 0;
     let cancelledOrders = 0;

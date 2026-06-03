@@ -29,24 +29,26 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Xóa đơn hàng trong file cache cục bộ
-    try {
-      const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
-      if (fs.existsSync(cacheFilePath)) {
-        const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
-        let cachedOrders = JSON.parse(fileContent || '[]');
-        
-        // Lọc bỏ đơn hàng cần xóa
-        const originalCount = cachedOrders.length;
-        cachedOrders = cachedOrders.filter((o: any) => o.id !== id);
-        
-        if (cachedOrders.length !== originalCount) {
-          fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
-          console.log(`Deleted order ${id} from local cache.`);
+    // 2. Xóa đơn hàng trong file cache cục bộ (chỉ chạy ở dev local)
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const cacheFilePath = path.join(process.cwd(), 'app/lib/orders-cache.json');
+        if (fs.existsSync(cacheFilePath)) {
+          const fileContent = fs.readFileSync(cacheFilePath, 'utf8');
+          let cachedOrders = JSON.parse(fileContent || '[]');
+          
+          // Lọc bỏ đơn hàng cần xóa
+          const originalCount = cachedOrders.length;
+          cachedOrders = cachedOrders.filter((o: any) => o.id !== id);
+          
+          if (cachedOrders.length !== originalCount) {
+            fs.writeFileSync(cacheFilePath, JSON.stringify(cachedOrders, null, 2), 'utf8');
+            console.log(`Deleted order ${id} from local cache.`);
+          }
         }
+      } catch (cacheError) {
+        console.error("Error updating local cache for delete:", cacheError);
       }
-    } catch (cacheError) {
-      console.error("Error updating local cache for delete:", cacheError);
     }
 
     // 3. Gửi webhook yêu cầu xóa đơn hàng trên Google Sheets

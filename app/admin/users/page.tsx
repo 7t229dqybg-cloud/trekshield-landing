@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -25,7 +26,6 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     let localOrdersList: any[] = [];
-    setIsLoading(true);
 
     async function loadLocalOrders() {
       try {

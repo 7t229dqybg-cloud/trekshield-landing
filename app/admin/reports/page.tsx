@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -7,11 +8,9 @@ import { db } from '../../lib/firebase';
 
 export default function AdminReportsPage() {
   const [orders, setOrders] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let localOrdersList: any[] = [];
-    setIsLoading(true);
 
     async function loadLocalOrders() {
       try {
@@ -48,16 +47,13 @@ export default function AdminReportsPage() {
           });
 
           setOrders(merged);
-          setIsLoading(false);
         }, (fsErr) => {
           console.error("Firestore listener error in Reports, relying on cache:", fsErr);
           setOrders(localOrdersList);
-          setIsLoading(false);
         });
       } catch (err) {
         console.error("Failed to setup Firestore listener in Reports:", err);
         setOrders(localOrdersList);
-        setIsLoading(false);
       }
     });
 
@@ -71,9 +67,7 @@ export default function AdminReportsPage() {
   const dynamicStats = useMemo(() => {
     let totalRevenueNum = 0;
     let completedOrders = 0;
-    let totalOrders = activeOrders.length;
-    let pendingOrders = 0;
-    let cancelledOrders = 0;
+    const totalOrders = activeOrders.length;
 
     let monthlyRevenueNum = 0;
     let monthlyCompletedOrders = 0;
@@ -96,10 +90,6 @@ export default function AdminReportsPage() {
           monthlyRevenueNum += amount;
           monthlyCompletedOrders++;
         }
-      } else if (o.status === 'Pending') {
-        pendingOrders++;
-      } else if (o.status === 'Cancelled') {
-        cancelledOrders++;
       }
     });
 

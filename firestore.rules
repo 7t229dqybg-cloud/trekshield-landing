@@ -42,18 +42,23 @@ service cloud.firestore {
     // Validate email format (helper)
     function isValidEmail(email) {
       return email is string &&
-        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}$");
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
     // Validate ISO 8601 date string format (YYYY-MM-DDTHH:MM:SS)
     function isValidDateString(dateStr) {
       return dateStr is string &&
-        dateStr.matches("^\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}.*Z?$");
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
     }
 
     // Validate order schema on creation
     function isValidOrderCreation(data) {
-      let allowedFields = ['id', 'name', 'customer', 'phone', 'product', 'quantity', 'qty', 'total', 'location', 'note', 'status', 'source', 'date', 'createdAt'];
+      let allowedFields = [
+        'id', 'name', 'customer', 'phone', 'product', 'quantity', 'qty', 
+        'total', 'location', 'note', 'status', 'source', 'date', 'createdAt',
+        'syncStatus', 'syncError', 'updatedAt', 'lastSyncedAt', 'sheetRowId',
+        'paymentStatus', 'paymentMethod', 'payosOrderCode'
+      ];
       return request.resource.data.keys().hasAll(['name', 'customer', 'phone', 'product', 'qty', 'total', 'status', 'source', 'createdAt']) &&
              hasOnlyAllowedFields(allowedFields) &&
              data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
@@ -67,14 +72,35 @@ service cloud.firestore {
              isValidDateString(data.createdAt) &&
              (!('location' in data) || (data.location is string && data.location.size() <= 200)) &&
              (!('note' in data) || (data.note is string && data.note.size() <= 500)) &&
-             (!('id' in data) || (data.id is string));
+             (!('id' in data) || (data.id is string)) &&
+             (!('syncStatus' in data) || (data.syncStatus == 'pending' || data.syncStatus == 'synced' || data.syncStatus == 'failed')) &&
+             (!('syncError' in data) || (data.syncError is string || data.syncError == null)) &&
+             (!('updatedAt' in data) || isValidDateString(data.updatedAt)) &&
+             (!('lastSyncedAt' in data) || isValidDateString(data.lastSyncedAt)) &&
+             (!('sheetRowId' in data) || (data.sheetRowId is string || data.sheetRowId is number || data.sheetRowId == null)) &&
+             (!('paymentStatus' in data) || (data.paymentStatus is string)) &&
+             (!('paymentMethod' in data) || (data.paymentMethod is string)) &&
+             (!('payosOrderCode' in data) || (data.payosOrderCode is number));
     }
 
     // Validate order schema on update
     function isValidOrderUpdate(data) {
-      let allowedFields = ['id', 'name', 'customer', 'phone', 'product', 'quantity', 'qty', 'total', 'location', 'note', 'status', 'source', 'date', 'createdAt'];
+      let allowedFields = [
+        'id', 'name', 'customer', 'phone', 'product', 'quantity', 'qty', 
+        'total', 'location', 'note', 'status', 'source', 'date', 'createdAt',
+        'syncStatus', 'syncError', 'updatedAt', 'lastSyncedAt', 'sheetRowId',
+        'paymentStatus', 'paymentMethod', 'payosOrderCode'
+      ];
       return hasOnlyAllowedFields(allowedFields) &&
-             (data.status == 'Pending' || data.status == 'Completed' || data.status == 'Cancelled');
+             (data.status == 'Pending' || data.status == 'Completed' || data.status == 'Cancelled') &&
+             (!('syncStatus' in data) || (data.syncStatus == 'pending' || data.syncStatus == 'synced' || data.syncStatus == 'failed')) &&
+             (!('syncError' in data) || (data.syncError is string || data.syncError == null)) &&
+             (!('updatedAt' in data) || isValidDateString(data.updatedAt)) &&
+             (!('lastSyncedAt' in data) || isValidDateString(data.lastSyncedAt)) &&
+             (!('sheetRowId' in data) || (data.sheetRowId is string || data.sheetRowId is number || data.sheetRowId == null)) &&
+             (!('paymentStatus' in data) || (data.paymentStatus is string)) &&
+             (!('paymentMethod' in data) || (data.paymentMethod is string)) &&
+             (!('payosOrderCode' in data) || (data.payosOrderCode is number));
     }
 
     // ===============================================================
@@ -92,6 +118,10 @@ service cloud.firestore {
     }
 
     match /products/{productId} {
+      allow read, write: if true;
+    }
+
+    match /payment_attempts/{attemptId} {
       allow read, write: if true;
     }
   }
