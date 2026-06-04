@@ -68,7 +68,7 @@ export default function OrderForm() {
     setQrLoading(true);
     setQrCodeUrl(null);
     setCheckoutUrl(null);
-    
+
     try {
       const res = await fetch("/api/payos/create", {
         method: "POST",
@@ -129,13 +129,13 @@ export default function OrderForm() {
           setQrCodeUrl(null);
           setCheckoutUrl(null);
           setOrderCode(null);
-          
+
           // Reset form fields
           const form = document.querySelector("form") as HTMLFormElement | null;
           if (form) form.reset();
           setSelectedProduct("");
           setSelectedQuantity("1");
-          
+
           // Rotate idempotency key
           generateNewKey();
         }
@@ -341,7 +341,7 @@ export default function OrderForm() {
 
         <div className="space-y-1">
           <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-            Khu vực nhận hàng
+            Địa chỉ nhận hàng
           </label>
           <input
             name="location"
@@ -372,11 +372,10 @@ export default function OrderForm() {
           Hình thức thanh toán <span className="text-rose-500">*</span>
         </label>
         <div className="grid grid-cols-2 gap-4">
-          <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
-            paymentMethod === "cash"
+          <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${paymentMethod === "cash"
               ? "bg-brand-500/10 border-brand-500 dark:bg-emerald-500/10 dark:border-emerald-500"
               : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900"
-          }`}>
+            }`}>
             <input
               type="radio"
               name="paymentMethod"
@@ -392,11 +391,10 @@ export default function OrderForm() {
             </div>
           </label>
 
-          <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
-            paymentMethod === "transfer"
+          <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${paymentMethod === "transfer"
               ? "bg-brand-500/10 border-brand-500 dark:bg-emerald-500/10 dark:border-emerald-500"
               : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900"
-          }`}>
+            }`}>
             <input
               type="radio"
               name="paymentMethod"
